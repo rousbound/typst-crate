@@ -13,7 +13,7 @@ categories = ["compilers", "science"]
 keywords = ["markup", "typesetting"]
 
 [workspace]
-members = ["cli", "docs", "library", "macros", "tests"]
+members = ["cli", "docs", "library", "macros", "tests", "genpdf"]
 default-members = ["cli"]
 
 [workspace.package]

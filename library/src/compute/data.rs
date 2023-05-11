@@ -180,7 +180,7 @@ pub fn json(
 }
 
 /// Convert a JSON value to a Typst value.
-fn convert_json(value: serde_json::Value) -> Value {
+pub fn convert_json(value: serde_json::Value) -> Value {
     match value {
         serde_json::Value::Null => Value::None,
         serde_json::Value::Bool(v) => Value::Bool(v),
