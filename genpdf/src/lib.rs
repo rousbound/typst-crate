@@ -176,7 +176,7 @@ pub fn genpdf(
     output: PathBuf,
     root: PathBuf,
     json: Option<Value>
-    ) -> FileResult<Vec<u8>>
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>>
 {
     // Create the world that serves sources, fonts and files.
     //let root = if let Some(root) = &root {
@@ -197,7 +197,12 @@ pub fn genpdf(
     let mut world = SystemWorld::new(root, &command.font_paths, json);
     // Perform initial compilation.
     //let failed = compile_once(&mut world, &command)?;
-    compile_once(&mut world, &command) 
+    match compile_once(&mut world, &command) {
+
+        Ok(data) => Ok(data),
+        Err(e) => Err(Box::new(e)),
+
+    }
 
 }
 
