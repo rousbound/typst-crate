@@ -29,9 +29,6 @@ use typst::util::{Buffer, PathExt};
 use typst::World;
 use walkdir::WalkDir;
 
-//use crate::args::{CliArguments, Command, CompileCommand};
-//use crate::trace::init_tracing;
-
 use typst_library::prelude::EcoString;
 
 use serde_json::{json, Value};
@@ -178,25 +175,9 @@ pub fn genpdf(
     json: Option<Value>
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>>
 {
-    // Create the world that serves sources, fonts and files.
-    //let root = if let Some(root) = &root {
-        //root.clone()
-    //} else if let Some(dir) = command
-        //.input
-        //.canonicalize()
-        //.ok()
-        //.as_ref()
-        //.and_then(|path| path.parent())
-    //{
-        //dir.into()
-    //} else {
-        //PathBuf::new()
-    //};
 
     let command = CompileSettings::new(input, Some(output), false, Some(root.clone()), vec![PathBuf::new()], None);
     let mut world = SystemWorld::new(root, &command.font_paths, json);
-    // Perform initial compilation.
-    //let failed = compile_once(&mut world, &command)?;
     match compile_once(&mut world, &command) {
 
         Ok(data) => Ok(data),
@@ -206,106 +187,11 @@ pub fn genpdf(
 
 }
 
-/// Print an application-level error (independent from a source file).
-fn print_error(msg: &str) -> io::Result<()> {
-    let mut w = StandardStream::stderr(ColorChoice::Auto);
-    let styles = term::Styles::default();
-
-    w.set_color(&styles.header_error)?;
-    write!(w, "error")?;
-
-    w.reset()?;
-    writeln!(w, ": {msg}.")
-}
-
-/// Execute a compilation command.
-//fn compile(mut command: CompileSettings, json: Option<Value>) -> StrResult<()> {
-    //let root = if let Some(root) = &command.root {
-        //root.clone()
-    //} else if let Some(dir) = command
-        //.input
-        //.canonicalize()
-        //.ok()
-        //.as_ref()
-        //.and_then(|path| path.parent())
-    //{
-        //dir.into()
-    //} else {
-        //PathBuf::new()
-    //};
-
-    //// Create the world that serves sources, fonts and files.
-    //let mut world = SystemWorld::new(root, &command.font_paths, json);
-
-    //// Perform initial compilation.
-    //let failed = compile_once(&mut world, &command)?;
-
-    //// open the file if requested, this must be done on the first **successful** compilation
-    //if !failed {
-        //if let Some(open) = command.open.take() {
-            //open_file(open.as_deref(), &command.output)?;
-        //}
-    //}
-
-    //if !command.watch {
-        //// Return with non-zero exit code in case of error.
-        //if failed {
-            //return Err(EcoString::from("error compiling!"));
-            ////process::exit(1);
-        //}
-
-        //return Ok(());
-    //}
-
-    //// Setup file watching.
-    //let (tx, rx) = std::sync::mpsc::channel();
-    //let mut watcher = RecommendedWatcher::new(tx, notify::Config::default())
-        //.map_err(|_| "failed to watch directory")?;
-
-    //// Watch root directory recursively.
-    //watcher
-        //.watch(&world.root, RecursiveMode::Recursive)
-        //.map_err(|_| "failed to watch directory")?;
-
-    //// Handle events.
-    //let timeout = std::time::Duration::from_millis(100);
-    //loop {
-        //let mut recompile = false;
-        //for event in rx
-            //.recv()
-            //.into_iter()
-            //.chain(std::iter::from_fn(|| rx.recv_timeout(timeout).ok()))
-        //{
-            //let event = event.map_err(|_| "failed to watch directory")?;
-            //if event
-                //.paths
-                //.iter()
-                //.all(|path| is_same_file(path, &command.output).unwrap_or(false))
-            //{
-                //continue;
-            //}
-
-            //recompile |= world.relevant(&event);
-        //}
-
-        //if recompile {
-            //compile_once(&mut world, &command)?;
-            //comemo::evict(30);
-
-            //// open the file if requested, this must be done on the first **successful** compilation
-            //if let Some(open) = command.open.take() {
-                //open_file(open.as_deref(), &command.output)?;
-            //}
-        //}
-    //}
-//}
-
 /// Compile a single time.
 #[tracing::instrument(skip_all)]
 fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> FileResult<Vec<u8>> {
     tracing::info!("Starting compilation");
 
-    status(command, Status::Compiling).unwrap();
 
     world.reset();
     world.main = world.resolve(&command.input).map_err(|err| err.to_string())?;
@@ -314,131 +200,18 @@ fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> FileResul
         // Export the PDF.
         Ok(document) => {
             let buffer = typst::export::pdf(&document);
-            //fs::write(&command.output, buffer).map_err(|_| "failed to write PDF file")?;
-            status(command, Status::Success).unwrap();
-
             tracing::info!("Compilation succeeded");
             Ok(buffer)
         }
 
         // Print diagnostics.
         Err(errors) => {
-            status(command, Status::Error).unwrap();
-            print_diagnostics(world, *errors)
-                .map_err(|_| "failed to print diagnostics")?;
-
             tracing::info!("Compilation failed");
             Err("Compilation failed".into())
         }
     }
 }
 
-/// Clear the terminal and render the status message.
-#[tracing::instrument(skip_all)]
-fn status(command: &CompileSettings, status: Status) -> io::Result<()> {
-    if !command.watch {
-        return Ok(());
-    }
-
-    let esc = 27 as char;
-    let input = command.input.display();
-    let output = command.output.display();
-    let time = chrono::offset::Local::now();
-    let timestamp = time.format("%H:%M:%S");
-    let message = status.message();
-    let color = status.color();
-
-    let mut w = StandardStream::stderr(ColorChoice::Auto);
-    write!(w, "{esc}c{esc}[1;1H")?;
-
-    w.set_color(&color)?;
-    write!(w, "watching")?;
-    w.reset()?;
-    writeln!(w, " {input}")?;
-
-    w.set_color(&color)?;
-    write!(w, "writing to")?;
-    w.reset()?;
-    writeln!(w, " {output}")?;
-
-    writeln!(w)?;
-    writeln!(w, "[{timestamp}] {message}")?;
-    writeln!(w)?;
-
-    w.flush()
-}
-
-/// The status in which the watcher can be.
-enum Status {
-    Compiling,
-    Success,
-    Error,
-}
-
-impl Status {
-    fn message(&self) -> &str {
-        match self {
-            Self::Compiling => "compiling ...",
-            Self::Success => "compiled successfully",
-            Self::Error => "compiled with errors",
-        }
-    }
-
-    fn color(&self) -> termcolor::ColorSpec {
-        let styles = term::Styles::default();
-        match self {
-            Self::Error => styles.header_error,
-            _ => styles.header_note,
-        }
-    }
-}
-
-/// Print diagnostic messages to the terminal.
-fn print_diagnostics(
-    world: &SystemWorld,
-    errors: Vec<SourceError>,
-) -> Result<(), codespan_reporting::files::Error> {
-    let mut w = StandardStream::stderr(ColorChoice::Auto);
-    let config = term::Config { tab_width: 2, ..Default::default() };
-
-    for error in errors {
-        // The main diagnostic.
-        let range = error.range(world);
-        let diag = Diagnostic::error()
-            .with_message(error.message)
-            .with_labels(vec![Label::primary(error.span.source(), range)]);
-
-        term::emit(&mut w, &config, world, &diag)?;
-
-        // Stacktrace-like helper diagnostics.
-        for point in error.trace {
-            let message = point.v.to_string();
-            let help = Diagnostic::help().with_message(message).with_labels(vec![
-                Label::primary(
-                    point.span.source(),
-                    world.source(point.span.source()).range(point.span),
-                ),
-            ]);
-
-            term::emit(&mut w, &config, world, &help)?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Opens the given file using:
-/// - The default file viewer if `open` is `None`.
-/// - The given viewer provided by `open` if it is `Some`.
-fn open_file(open: Option<&str>, path: &Path) -> StrResult<()> {
-    if let Some(app) = open {
-        open::with_in_background(path, app);
-    } else {
-        open::that_in_background(path);
-    }
-
-    Ok(())
-}
 
 /// Execute a font listing command.
 fn fonts(command: FontsSettings) -> StrResult<()> {
@@ -483,22 +256,6 @@ struct PathSlot {
     source: OnceCell<FileResult<SourceId>>,
     buffer: OnceCell<FileResult<Buffer>>,
 }
-
-
-//#[func]
-//pub fn qrcode(
-    ///// Generate qrcode
-    //url: Spanned<String>,
-//) -> Value {
-    //let Spanned { v: url, span } = url;
-    //let path = vm.locate(&path).at(span)?;
-    ////let data = vm.world().file(&path).at(span)?;
-    ////let value: serde_json::Value =
-        ////serde_json::from_slice(&data).map_err(format_json_error).at(span)?;
-    ////convert_json(value)
-   //u 
-//}
-
 
 impl SystemWorld {
     fn new(root: PathBuf, font_paths: &[PathBuf], json: Option<Value> ) -> Self {
