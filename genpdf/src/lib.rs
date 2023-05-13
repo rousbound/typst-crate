@@ -8,6 +8,8 @@ use std::hash::Hash;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process;
+use std::error;
+
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::term::{self, termcolor};
@@ -172,18 +174,30 @@ impl FontsSettings {
 pub fn genpdf(
     input: PathBuf,
     output: PathBuf,
-    root: Option<PathBuf>,
+    root: PathBuf,
     json: Option<Value>
-    )
+    ) -> FileResult<Vec<u8>>
 {
-    match compile( CompileSettings::new(input, Some(output), false, root, vec![PathBuf::new()], None), json) {
+    // Create the world that serves sources, fonts and files.
+    //let root = if let Some(root) = &root {
+        //root.clone()
+    //} else if let Some(dir) = command
+        //.input
+        //.canonicalize()
+        //.ok()
+        //.as_ref()
+        //.and_then(|path| path.parent())
+    //{
+        //dir.into()
+    //} else {
+        //PathBuf::new()
+    //};
 
-        Ok(_) => println!("Ok!"),
-        Err(msg) => {
-            print_error(&msg).expect("failed to print error");
-        },
-
-    }
+    let command = CompileSettings::new(input, Some(output), false, Some(root.clone()), vec![PathBuf::new()], None);
+    let mut world = SystemWorld::new(root, &command.font_paths, json);
+    // Perform initial compilation.
+    //let failed = compile_once(&mut world, &command)?;
+    compile_once(&mut world, &command) 
 
 }
 
@@ -200,90 +214,90 @@ fn print_error(msg: &str) -> io::Result<()> {
 }
 
 /// Execute a compilation command.
-fn compile(mut command: CompileSettings, json: Option<Value>) -> StrResult<()> {
-    let root = if let Some(root) = &command.root {
-        root.clone()
-    } else if let Some(dir) = command
-        .input
-        .canonicalize()
-        .ok()
-        .as_ref()
-        .and_then(|path| path.parent())
-    {
-        dir.into()
-    } else {
-        PathBuf::new()
-    };
+//fn compile(mut command: CompileSettings, json: Option<Value>) -> StrResult<()> {
+    //let root = if let Some(root) = &command.root {
+        //root.clone()
+    //} else if let Some(dir) = command
+        //.input
+        //.canonicalize()
+        //.ok()
+        //.as_ref()
+        //.and_then(|path| path.parent())
+    //{
+        //dir.into()
+    //} else {
+        //PathBuf::new()
+    //};
 
-    // Create the world that serves sources, fonts and files.
-    let mut world = SystemWorld::new(root, &command.font_paths, json);
+    //// Create the world that serves sources, fonts and files.
+    //let mut world = SystemWorld::new(root, &command.font_paths, json);
 
-    // Perform initial compilation.
-    let failed = compile_once(&mut world, &command)?;
+    //// Perform initial compilation.
+    //let failed = compile_once(&mut world, &command)?;
 
-    // open the file if requested, this must be done on the first **successful** compilation
-    if !failed {
-        if let Some(open) = command.open.take() {
-            open_file(open.as_deref(), &command.output)?;
-        }
-    }
+    //// open the file if requested, this must be done on the first **successful** compilation
+    //if !failed {
+        //if let Some(open) = command.open.take() {
+            //open_file(open.as_deref(), &command.output)?;
+        //}
+    //}
 
-    if !command.watch {
-        // Return with non-zero exit code in case of error.
-        if failed {
-            return Err(EcoString::from("error compiling!"));
-            //process::exit(1);
-        }
+    //if !command.watch {
+        //// Return with non-zero exit code in case of error.
+        //if failed {
+            //return Err(EcoString::from("error compiling!"));
+            ////process::exit(1);
+        //}
 
-        return Ok(());
-    }
+        //return Ok(());
+    //}
 
-    // Setup file watching.
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut watcher = RecommendedWatcher::new(tx, notify::Config::default())
-        .map_err(|_| "failed to watch directory")?;
+    //// Setup file watching.
+    //let (tx, rx) = std::sync::mpsc::channel();
+    //let mut watcher = RecommendedWatcher::new(tx, notify::Config::default())
+        //.map_err(|_| "failed to watch directory")?;
 
-    // Watch root directory recursively.
-    watcher
-        .watch(&world.root, RecursiveMode::Recursive)
-        .map_err(|_| "failed to watch directory")?;
+    //// Watch root directory recursively.
+    //watcher
+        //.watch(&world.root, RecursiveMode::Recursive)
+        //.map_err(|_| "failed to watch directory")?;
 
-    // Handle events.
-    let timeout = std::time::Duration::from_millis(100);
-    loop {
-        let mut recompile = false;
-        for event in rx
-            .recv()
-            .into_iter()
-            .chain(std::iter::from_fn(|| rx.recv_timeout(timeout).ok()))
-        {
-            let event = event.map_err(|_| "failed to watch directory")?;
-            if event
-                .paths
-                .iter()
-                .all(|path| is_same_file(path, &command.output).unwrap_or(false))
-            {
-                continue;
-            }
+    //// Handle events.
+    //let timeout = std::time::Duration::from_millis(100);
+    //loop {
+        //let mut recompile = false;
+        //for event in rx
+            //.recv()
+            //.into_iter()
+            //.chain(std::iter::from_fn(|| rx.recv_timeout(timeout).ok()))
+        //{
+            //let event = event.map_err(|_| "failed to watch directory")?;
+            //if event
+                //.paths
+                //.iter()
+                //.all(|path| is_same_file(path, &command.output).unwrap_or(false))
+            //{
+                //continue;
+            //}
 
-            recompile |= world.relevant(&event);
-        }
+            //recompile |= world.relevant(&event);
+        //}
 
-        if recompile {
-            compile_once(&mut world, &command)?;
-            comemo::evict(30);
+        //if recompile {
+            //compile_once(&mut world, &command)?;
+            //comemo::evict(30);
 
-            // open the file if requested, this must be done on the first **successful** compilation
-            if let Some(open) = command.open.take() {
-                open_file(open.as_deref(), &command.output)?;
-            }
-        }
-    }
-}
+            //// open the file if requested, this must be done on the first **successful** compilation
+            //if let Some(open) = command.open.take() {
+                //open_file(open.as_deref(), &command.output)?;
+            //}
+        //}
+    //}
+//}
 
 /// Compile a single time.
 #[tracing::instrument(skip_all)]
-fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> StrResult<bool> {
+fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> FileResult<Vec<u8>> {
     tracing::info!("Starting compilation");
 
     status(command, Status::Compiling).unwrap();
@@ -295,11 +309,11 @@ fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> StrResult
         // Export the PDF.
         Ok(document) => {
             let buffer = typst::export::pdf(&document);
-            fs::write(&command.output, buffer).map_err(|_| "failed to write PDF file")?;
+            //fs::write(&command.output, buffer).map_err(|_| "failed to write PDF file")?;
             status(command, Status::Success).unwrap();
 
             tracing::info!("Compilation succeeded");
-            Ok(false)
+            Ok(buffer)
         }
 
         // Print diagnostics.
@@ -309,7 +323,7 @@ fn compile_once(world: &mut SystemWorld, command: &CompileSettings) -> StrResult
                 .map_err(|_| "failed to print diagnostics")?;
 
             tracing::info!("Compilation failed");
-            Ok(true)
+            Err("Compilation failed".into())
         }
     }
 }
@@ -488,22 +502,9 @@ impl SystemWorld {
 
         let mut library = typst_library::build();
 
-        //let my_value: Value = json!({
-            //"name": "John",
-            //"age": 30,
-            //"is_student": true,
-            //"hobbies": ["reading", "coding", "hiking"],
-            //"address": {
-                //"street": "123 Main St",
-                //"city": "Anytown",
-                //"state": "CA",
-                //"zip": "12345"
-            //}
-        //});
         if let Some(json) = json {
             library.global.scope_mut().define("dados", typst_library::compute::convert_json(json));
         }
-        //library.global.scope_mut().define("qrcode", typst_library::compute::convert_json(json));
 
         Self {
             root,

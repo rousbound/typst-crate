@@ -9,6 +9,7 @@ use std::string::FromUtf8Error;
 
 use comemo::Tracked;
 use ecow::EcoString;
+use std::convert::From;
 
 use crate::syntax::{ErrorPos, Span, Spanned};
 use crate::World;
@@ -195,6 +196,8 @@ pub enum FileError {
     InvalidUtf8,
     /// Another error.
     Other,
+    /// Generic
+    Generic(String),
 }
 
 impl FileError {
@@ -211,6 +214,10 @@ impl FileError {
             _ => Self::Other,
         }
     }
+    pub fn from_generic<T: ToString>(error: T) -> Self {
+        Self::Generic(error.to_string())
+    }
+
 }
 
 impl std::error::Error for FileError {}
@@ -226,6 +233,8 @@ impl Display for FileError {
             Self::NotSource => f.pad("not a typst source file"),
             Self::InvalidUtf8 => f.pad("file is not valid utf-8"),
             Self::Other => f.pad("failed to load file"),
+
+            Self::Generic(msg) => f.pad(msg),
         }
     }
 }
@@ -247,6 +256,19 @@ impl From<FileError> for EcoString {
         eco_format!("{error}")
     }
 }
+
+impl From<String> for FileError {
+    fn from(error: String) -> Self {
+        FileError::Generic(error)
+    }
+}
+
+impl From<&'static str> for FileError {
+    fn from(error: &'static str) -> Self {
+        FileError::Generic(error.to_string())
+    }
+}
+
 
 /// Format a user-facing error message for an XML-like file format.
 pub fn format_xml_like_error(format: &str, error: roxmltree::Error) -> EcoString {
