@@ -170,13 +170,12 @@ impl FontsSettings {
 
 pub fn genpdf(
     input: PathBuf,
-    output: PathBuf,
     root: PathBuf,
     json: Option<Value>
     ) -> Result<Vec<u8>, Box<dyn std::error::Error>>
 {
 
-    let command = CompileSettings::new(input, Some(output), false, Some(root.clone()), vec![PathBuf::new()], None);
+    let command = CompileSettings::new(input, None, false, Some(root.clone()), vec![PathBuf::new()], None);
     let mut world = SystemWorld::new(root, &command.font_paths, json);
     match compile_once(&mut world, &command) {
 
@@ -186,6 +185,9 @@ pub fn genpdf(
     }
 
 }
+
+
+
 
 /// Compile a single time.
 #[tracing::instrument(skip_all)]
